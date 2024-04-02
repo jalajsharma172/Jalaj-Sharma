@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.5.0 < 0.9.0;
+
+contract funding{
+    uint public min_money=10;
+    address  manager;
+    uint noofpeople;
+    uint  code_id=1;
+      modifier onlymanager{
+        require(manager==msg.sender,"You ca't access it");
+        _;
+    }
+    constructor(){
+        // min_money=10;
+        manager=msg.sender;
+    }
+    struct details{
+        address id;
+        uint money;
+        bool stop;
+    }
+    struct person{
+        uint target;
+        uint contributor_money;
+        string name;
+        // uint deadline;
+        address id;
+        bool complete;
+    } 
+    mapping (uint =>person)helper;
+    mapping(uint =>details)save_details;
+    
+    function create(string memory _name,uint target,address _id)public  payable onlymanager returns (uint ){
+        person storage temp=helper[code_id];
+        temp.contributor_money=0;
+        code_id++;// changed id for next one.
+        temp.name=_name ;
+        temp.id=_id;
+        temp.target=target*1e18;
+        temp.complete=false;
+        //printing
+        return temp.target;
+    }
+    function Refund(address id,uint _code_id)public onlymanager payable {
+            person storage temp=helper[_code_id];
+            details storage ss=save_details[_code_id];
+            require(ss.id==id,"Invalid id");
+            require(ss.money==msg.value,"Invalid refund request");
+            // if (manager!=msg.sender) {
+            //     ss.stop=true;
+            //     revert("Contact to Manager,to get refund.");
+            // }
+              bool sent = payable(id).send(msg.value);
+             require(sent, "Failed to send Ether");
+            temp.contributor_money-=msg.value;
+                temp.complete=false;
+    }
+    // function number_of_refund_request()private  view returns (uint ){
+    //        uint p=0;
+    //         for(uint a=1;a<code_id;a++){
+    //             details storage ss=save_details[a];
+    //             if (ss.stop==true) {
+    //                 p++;
+    //                 break ;
+    //             }   
+    //         }
+    //         return p;
+    // }
+    function Refund_request_Id()public view onlymanager returns (uint id_number,uint money ){
+            uint p=0;
+            for(uint a=1;a<code_id;a++){
+                details storage ssp=save_details[a];
+                if (ssp.stop==true) {
+                    p=a;
+                    break ;
+                }   
+            }
+            details storage ss=save_details[p];
+            return (p,ss.money);
+    }
+      function SendMoney(uint _code_id) public payable returns (uint ,uint,bool) {
+        require(msg.sender!=manager,"Manager can't send itself");
+        require(min_money<msg.value,"Money is too less.");
+        person storage temp=helper[_code_id];
+        require(temp.complete==false,"Help was already made.");
+        //  require(keccak256(abi.encodePacked(temp.name)) == keccak256(abi.encodePacked(_name)), "Invalid person name");
+        temp.contributor_money+=msg.value;
+         if (temp.contributor_money>=temp.target){temp.complete=true;}
+        details storage ss=save_details[_code_id];
+         ss.id=msg.sender;
+         ss.money=msg.value;
+         bool sent = payable(manager).send(msg.value);
+        require(sent, "Failed to send Ether");
+         return (temp.target,temp.contributor_money,temp.complete);
+    }
+    function complete_Transjection (uint i) public onlymanager payable returns (string memory name,uint target,uint sended_money,bool _complete){
+            person storage temp=helper[i];
+        require(temp.complete==true,"Requested money is not recieved");
+                require(temp.contributor_money>=temp.target,"Error!");
+                require(temp.target<=msg.value&& temp.contributor_money==msg.value,"Wrong Amount");
+                        details storage ss=save_details[i];
+                        require(ss.stop==false,"Refund has been asked.");  
+            // require(Refund_request_Id(),"Refund has been asked.");
+                    name=temp.name;
+                    target=temp.target;
+                    sended_money=temp.contributor_money;
+                    _complete=temp.complete;
+               (bool sent, ) = payable(temp.id).call{value: msg.value}("");
+                 require(sent, "Failed to send Ether");
+                 temp.contributor_money=0;
+                 temp.target=0;
+    }
+    function search_id(string memory name)public view  returns (uint p ){
+        for ( uint a=1; a<=code_id ;a++){
+             person storage temp=helper[a];
+               if (keccak256(abi.encodePacked(temp.name)) == keccak256(abi.encodePacked(name))) {
+                p=a;
+                break ;
+            }
+        }
+        return p;
+    }
+    function search_collected_money(uint ID_number)public view  returns(uint ){
+        person storage temp=helper[ID_number];
+        return temp.contributor_money;
+    }
+
+    function Request_Fullfilled()public view  onlymanager returns(uint ){
+        uint a;
+        for ( a=1;a<code_id;a++){
+             person storage temp=helper[a];
+             if (temp.complete){
+                  break ;
+             }
+        }
+       return a;
+    }
+    function number_of_request()public view onlymanager returns (uint Total_Requests){
+        return noofpeople;
+    }
+}
